@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   // since we're not modifying data — just be sure RLS SELECT policy allows it, which we set up Day 6)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
   const { data: user, error: userError } = await supabase
     .from("users")
