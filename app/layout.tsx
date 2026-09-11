@@ -7,7 +7,7 @@ const spectral = Spectral({ subsets: ["latin"], weight: ["400", "500", "600"], v
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "Forward — Job Search Roadmap",
+  title: "Forward — Job Search Roadmap 2026",
   description: "A personalized roadmap for your next role.",
 };
 
