@@ -16,24 +16,24 @@ export default function IntakeForm() {
   const [saved, setSaved] = useState(false);
 
   const handleSubmit = async () => {
-  setSaving(true);
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+    setSaving(true);
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
 
-  const { error } = await supabase.from("users").upsert({
-    id: userId,
-    role,
-    years_experience: years ? parseInt(years) : null,
-    tech_stack: stack,
-    location,
-    runway_weeks: runway ? parseInt(runway) : null,
-    exit_reason: exitReason,
-  });
+    const { error } = await supabase.from("users").upsert({
+      id: userId,
+      role,
+      years_experience: years ? parseInt(years) : null,
+      tech_stack: stack,
+      location,
+      runway_weeks: runway ? parseInt(runway) : null,
+      exit_reason: exitReason,
+    });
 
-  setSaving(false);
-  if (!error) setSaved(true);
-  else console.error(error);
-};
+    setSaving(false);
+    if (!error) setSaved(true);
+    else console.error(error);
+  };
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && stackInput.trim()) {
@@ -162,9 +162,24 @@ export default function IntakeForm() {
         {saving ? "Saving..." : "Generate my roadmap"} <ArrowRight size={15} />
       </button>
       {saved && (
-        <p className="text-accent text-sm mt-3">
-          Saved! (Roadmap generation comes on Day 7)
-        </p>
+        <div className="mt-3">
+          <p className="text-accent text-sm mb-2">Saved!</p>
+          <button
+            onClick={async () => {
+              const { data: userData } = await supabase.auth.getUser();
+              const res = await fetch("/api/generate-roadmap", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: userData.user?.id }),
+              });
+              const json = await res.json();
+              console.log("ROADMAP:", json);
+            }}
+            className="text-xs text-textDim underline"
+          >
+            Test: generate roadmap (check console)
+          </button>
+        </div>
       )}
     </div>
   );
