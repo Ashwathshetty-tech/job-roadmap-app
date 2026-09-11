@@ -16,27 +16,24 @@ export default function IntakeForm() {
   const [saved, setSaved] = useState(false);
 
   const handleSubmit = async () => {
-    setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+  setSaving(true);
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
 
-    const res = await fetch("/api/save-intake", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId,
-        role,
-        yearsExperience: years ? parseInt(years) : null,
-        techStack: stack,
-        location,
-        runwayWeeks: runway ? parseInt(runway) : null,
-        exitReason,
-      }),
-    });
+  const { error } = await supabase.from("users").upsert({
+    id: userId,
+    role,
+    years_experience: years ? parseInt(years) : null,
+    tech_stack: stack,
+    location,
+    runway_weeks: runway ? parseInt(runway) : null,
+    exit_reason: exitReason,
+  });
 
-    setSaving(false);
-    if (res.ok) setSaved(true);
-  };
+  setSaving(false);
+  if (!error) setSaved(true);
+  else console.error(error);
+};
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && stackInput.trim()) {
