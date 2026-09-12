@@ -13,14 +13,18 @@ export default function IntakeForm() {
   const [exitReason, setExitReason] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    setError(null);
     setSaving(true);
+
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
 
-    const { error } = await supabase.from("users").upsert({
+    const { error: saveError } = await supabase.from("users").upsert({
       id: userId,
       role,
       years_experience: years ? parseInt(years) : null,
@@ -31,8 +35,33 @@ export default function IntakeForm() {
     });
 
     setSaving(false);
-    if (!error) setSaved(true);
-    else console.error(error);
+
+    if (saveError) {
+      console.error(saveError);
+      setError("Could not save your info. Try again.");
+      return;
+    }
+
+    setSaved(true);
+    setGenerating(true);
+
+    const res = await fetch("/api/generate-roadmap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+
+    setGenerating(false);
+
+    if (!res.ok) {
+      const json = await res.json();
+      console.error(json);
+      setError("Saved, but couldn't generate your roadmap. Try again from here.");
+      return;
+    }
+
+    // Success — the RoadmapView component will fetch the saved roadmap
+    // when the user switches to the Roadmap tab.
   };
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -156,31 +185,23 @@ export default function IntakeForm() {
 
       <button
         onClick={handleSubmit}
-        disabled={saving}
+        disabled={saving || generating}
         className="bg-accent text-bg font-semibold text-sm rounded px-5 py-3 flex items-center gap-2 disabled:opacity-50"
       >
-        {saving ? "Saving..." : "Generate my roadmap"} <ArrowRight size={15} />
+        {saving
+          ? "Saving..."
+          : generating
+          ? "Generating your roadmap..."
+          : "Generate my roadmap"}{" "}
+        <ArrowRight size={15} />
       </button>
-      {saved && (
-        <div className="mt-3">
-          <p className="text-accent text-sm mb-2">Saved!</p>
-          <button
-            onClick={async () => {
-              const { data: userData } = await supabase.auth.getUser();
-              const res = await fetch("/api/generate-roadmap", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: userData.user?.id }),
-              });
-              const json = await res.json();
-              console.log("ROADMAP:", json);
-            }}
-            className="text-xs text-textDim underline"
-          >
-            Test: generate roadmap (check console)
-          </button>
-        </div>
+
+      {saved && !generating && !error && (
+        <p className="text-accent text-sm mt-3">
+          Done — switch to the Roadmap tab to see your plan.
+        </p>
       )}
+      {error && <p className="text-danger text-sm mt-3">{error}</p>}
     </div>
   );
 }

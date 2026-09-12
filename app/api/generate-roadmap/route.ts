@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   // since we're not modifying data — just be sure RLS SELECT policy allows it, which we set up Day 6)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
   const { data: user, error: userError } = await supabase
     .from("users")
@@ -20,7 +20,10 @@ export async function POST(req: Request) {
     .single();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Could not load user intake data" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Could not load user intake data" },
+      { status: 400 },
+    );
   }
 
   const prompt = `You are a career strategist helping a laid-off IT professional plan their job search.
@@ -65,13 +68,31 @@ Respond with ONLY valid JSON, no other text, in this exact shape:
 
   const textBlock = message.content.find((b) => b.type === "text");
   if (!textBlock || textBlock.type !== "text") {
-    return NextResponse.json({ error: "No text response from model" }, { status: 500 });
+    return NextResponse.json(
+      { error: "No text response from model" },
+      { status: 500 },
+    );
   }
 
   try {
     const roadmap = JSON.parse(textBlock.text);
+
+    const { error: saveError } = await supabase
+      .from("roadmaps")
+      .upsert(
+        { user_id: userId, weeks: roadmap.weeks },
+        { onConflict: "user_id" },
+      );
+
+    if (saveError) {
+      return NextResponse.json({ error: saveError.message }, { status: 500 });
+    }
+
     return NextResponse.json({ roadmap });
   } catch {
-    return NextResponse.json({ error: "Failed to parse roadmap JSON", raw: textBlock.text }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to parse roadmap JSON", raw: textBlock.text },
+      { status: 500 },
+    );
   }
 }

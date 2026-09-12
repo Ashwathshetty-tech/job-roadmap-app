@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import IntakeForm from "@/components/IntakeForm";
 import LoginForm from "@/components/LoginForm";
+import RoadmapView from "@/components/RoadmapView";
 
 export default function Home() {
   const [tab, setTab] = useState<"intake" | "roadmap">("intake");
@@ -49,7 +50,7 @@ export default function Home() {
       ) : tab === "intake" ? (
         <IntakeForm />
       ) : (
-        <div className="text-textDim text-sm">Roadmap view goes here (Day 8)</div>
+        <RoadmapView />
       )}
     </div>
   );
