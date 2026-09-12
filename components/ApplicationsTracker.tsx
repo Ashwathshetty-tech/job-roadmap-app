@@ -8,6 +8,7 @@ type Application = {
   company: string;
   role: string;
   status: string;
+  interview_completed_at: string | null;
 };
 
 const statusStyle: Record<
@@ -30,6 +31,15 @@ const statusStyle: Record<
   ghosted: { label: "Ghosted", color: "#9AA4AC", bg: "transparent" },
 };
 
+const DEFAULT_EXPECTED_DAYS = 10;
+
+function daysSince(dateStr: string): number {
+  const past = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - past.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
 export default function ApplicationsTracker() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +55,7 @@ export default function ApplicationsTracker() {
 
     const { data } = await supabase
       .from("applications")
-      .select("id, company, role, status")
+      .select("id, company, role, status, interview_completed_at")
       .eq("user_id", uid)
       .order("created_at", { ascending: false });
 
@@ -152,22 +162,30 @@ export default function ApplicationsTracker() {
               <div className="text-sm text-text">{app.company}</div>
               <div className="text-xs text-textDim mt-0.5">{app.role}</div>
             </div>
-            <select
-              value={app.status}
-              onChange={(e) => updateStatus(app.id, e.target.value)}
-              style={{
-                color: s.color,
-                background: s.bg,
-                borderColor: `${s.color}55`,
-              }}
-              className="text-xs rounded px-2.5 py-1 border cursor-pointer outline-none"
-            >
-              {Object.entries(statusStyle).map(([key, val]) => (
-                <option key={key} value={key} style={{ color: "#000" }}>
-                  {val.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-3.5">
+              {app.status === "waiting" && app.interview_completed_at && (
+                <span className="font-mono text-[11px] text-textDim flex items-center gap-1">
+                  Day {daysSince(app.interview_completed_at)} of ~
+                  {DEFAULT_EXPECTED_DAYS}
+                </span>
+              )}
+              <select
+                value={app.status}
+                onChange={(e) => updateStatus(app.id, e.target.value)}
+                style={{
+                  color: s.color,
+                  background: s.bg,
+                  borderColor: `${s.color}55`,
+                }}
+                className="text-xs rounded px-2.5 py-1 border cursor-pointer outline-none"
+              >
+                {Object.entries(statusStyle).map(([key, val]) => (
+                  <option key={key} value={key} style={{ color: "#000" }}>
+                    {val.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         );
       })}
