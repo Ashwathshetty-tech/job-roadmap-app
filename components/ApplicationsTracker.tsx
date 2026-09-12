@@ -10,12 +10,23 @@ type Application = {
   status: string;
 };
 
-const statusStyle: Record<string, { label: string; color: string; bg: string }> = {
+const statusStyle: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
   applied: { label: "Applied", color: "#9AA4AC", bg: "transparent" },
-  interviewing: { label: "Interviewing", color: "#4FA8A0", bg: "rgba(79,168,160,0.12)" },
+  interviewing: {
+    label: "Interviewing",
+    color: "#4FA8A0",
+    bg: "rgba(79,168,160,0.12)",
+  },
   waiting: { label: "Waiting", color: "#D4933D", bg: "rgba(212,147,61,0.12)" },
   offer: { label: "Offer", color: "#7FBF8F", bg: "rgba(127,191,143,0.12)" },
-  rejected: { label: "Rejected", color: "#C97066", bg: "rgba(201,112,102,0.1)" },
+  rejected: {
+    label: "Rejected",
+    color: "#C97066",
+    bg: "rgba(201,112,102,0.1)",
+  },
   ghosted: { label: "Ghosted", color: "#9AA4AC", bg: "transparent" },
 };
 
@@ -66,7 +77,28 @@ export default function ApplicationsTracker() {
     }
   };
 
-  if (loading) return <p className="text-textDim text-sm">Loading applications...</p>;
+  const updateStatus = async (appId: string, newStatus: string) => {
+    const updates: Record<string, any> = { status: newStatus };
+
+    // Stamp the timestamp when an application enters Waiting
+    if (newStatus === "waiting") {
+      updates.interview_completed_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from("applications")
+      .update(updates)
+      .eq("id", appId);
+
+    if (!error) {
+      load();
+    } else {
+      console.error(error);
+    }
+  };
+
+  if (loading)
+    return <p className="text-textDim text-sm">Loading applications...</p>;
 
   return (
     <div>
@@ -120,12 +152,22 @@ export default function ApplicationsTracker() {
               <div className="text-sm text-text">{app.company}</div>
               <div className="text-xs text-textDim mt-0.5">{app.role}</div>
             </div>
-            <span
-              style={{ color: s.color, background: s.bg, borderColor: `${s.color}33` }}
-              className="text-xs rounded px-2.5 py-1 border"
+            <select
+              value={app.status}
+              onChange={(e) => updateStatus(app.id, e.target.value)}
+              style={{
+                color: s.color,
+                background: s.bg,
+                borderColor: `${s.color}55`,
+              }}
+              className="text-xs rounded px-2.5 py-1 border cursor-pointer outline-none"
             >
-              {s.label}
-            </span>
+              {Object.entries(statusStyle).map(([key, val]) => (
+                <option key={key} value={key} style={{ color: "#000" }}>
+                  {val.label}
+                </option>
+              ))}
+            </select>
           </div>
         );
       })}
