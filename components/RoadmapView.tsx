@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Circle } from "lucide-react";
+import { Circle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Week = {
@@ -16,17 +16,37 @@ export default function RoadmapView() {
   const [weeks, setWeeks] = useState<Week[] | null>(null);
   const [selected, setSelected] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       const { data: userData } = await supabase.auth.getUser();
-      const { data, error } = await supabase
+      const uid = userData.user?.id ?? null;
+      setUserId(uid);
+
+      const { data: roadmapData, error: roadmapError } = await supabase
         .from("roadmaps")
         .select("weeks")
-        .eq("user_id", userData.user?.id)
+        .eq("user_id", uid)
         .single();
 
-      if (!error && data) setWeeks(data.weeks as Week[]);
+      if (!roadmapError && roadmapData) setWeeks(roadmapData.weeks as Week[]);
+
+      // Load existing checked state
+      const { data: logData } = await supabase
+        .from("action_log")
+        .select("week_number, section, item_index, done")
+        .eq("user_id", uid);
+
+      if (logData) {
+        const initial: Record<string, boolean> = {};
+        logData.forEach((row) => {
+          initial[`${row.week_number}-${row.section}-${row.item_index}`] = row.done;
+        });
+        setChecked(initial);
+      }
+
       setLoading(false);
     };
     load();
@@ -36,6 +56,45 @@ export default function RoadmapView() {
   if (!weeks) return <p className="text-textDim text-sm">No roadmap yet — complete the Intake form and generate one.</p>;
 
   const week = weeks.find((w) => w.week_number === selected) || weeks[0];
+  const itemKey = (section: string, index: number) => `${week.week_number}-${section}-${index}`;
+
+  const toggle = async (section: string, index: number) => {
+    const key = itemKey(section, index);
+    const newValue = !checked[key];
+
+    // Update UI immediately (optimistic update)
+    setChecked((prev) => ({ ...prev, [key]: newValue }));
+
+    // Persist to Supabase
+    const { error } = await supabase.from("action_log").upsert(
+      {
+        user_id: userId,
+        week_number: week.week_number,
+        section,
+        item_index: index,
+        done: newValue,
+      },
+      { onConflict: "user_id,week_number,section,item_index" }
+    );
+
+    if (error) {
+      console.error("Failed to save action:", error);
+      // Revert on failure
+      setChecked((prev) => ({ ...prev, [key]: !newValue }));
+    }
+  };
+
+  const sections = [
+    { title: "Skill actions", key: "skill", items: week.skill_actions },
+    { title: "Networking", key: "networking", items: week.networking_actions },
+    { title: "Interview prep", key: "interview", items: week.interview_prep_actions },
+  ].filter((s) => s.items?.length);
+
+  const totalItems = sections.reduce((sum, s) => sum + s.items.length, 0);
+  const doneItems = sections.reduce(
+    (sum, s) => sum + s.items.filter((_, i) => checked[itemKey(s.key, i)]).length,
+    0
+  );
 
   return (
     <div className="grid grid-cols-[200px_1fr] gap-10">
@@ -61,27 +120,38 @@ export default function RoadmapView() {
 
       <div>
         <h2 className="font-serif text-2xl text-text mb-1.5">{week.focus_summary}</h2>
-        <div className="text-sm text-textDim mb-7">
+        <div className="text-sm text-textDim mb-1">
           Target: {week.application_target} applications this week
         </div>
+        <div className="text-xs text-accent mb-7">
+          {doneItems} of {totalItems} actions done this week
+        </div>
 
-        {[
-          { title: "Skill actions", items: week.skill_actions },
-          { title: "Networking", items: week.networking_actions },
-          { title: "Interview prep", items: week.interview_prep_actions },
-        ]
-          .filter((s) => s.items?.length)
-          .map((section) => (
-            <div key={section.title} className="mb-6">
-              <div className="text-xs text-textDim mb-2.5">{section.title}</div>
-              {section.items.map((item, i) => (
-                <div key={i} className="flex items-center gap-2.5 py-2 border-b border-border">
-                  <Circle size={15} className="text-textDim" />
-                  <span className="text-sm text-text">{item}</span>
+        {sections.map((section) => (
+          <div key={section.title} className="mb-6">
+            <div className="text-xs text-textDim mb-2.5">{section.title}</div>
+            {section.items.map((item, i) => {
+              const key = itemKey(section.key, i);
+              const isChecked = !!checked[key];
+              return (
+                <div
+                  key={i}
+                  onClick={() => toggle(section.key, i)}
+                  className="flex items-center gap-2.5 py-2 border-b border-border cursor-pointer group"
+                >
+                  {isChecked ? (
+                    <CheckCircle2 size={15} className="text-accent" />
+                  ) : (
+                    <Circle size={15} className="text-textDim group-hover:text-text" />
+                  )}
+                  <span className={`text-sm ${isChecked ? "text-textDim line-through" : "text-text"}`}>
+                    {item}
+                  </span>
                 </div>
-              ))}
-            </div>
-          ))}
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
