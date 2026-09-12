@@ -75,7 +75,14 @@ Respond with ONLY valid JSON, no other text, in this exact shape:
   }
 
   try {
-    const roadmap = JSON.parse(textBlock.text);
+    // Strip markdown code fences if present
+    const cleaned = textBlock.text
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+
+    const roadmap = JSON.parse(cleaned);
 
     const { error: saveError } = await supabase
       .from("roadmaps")
