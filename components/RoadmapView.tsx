@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Circle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import ApplicationsTracker from "./ApplicationsTracker";
 
 type Week = {
   week_number: number;
@@ -245,6 +246,10 @@ export default function RoadmapView() {
           ))}
         </div>
       </div>
+      <div className="mt-12 pt-8 border-t border-border">
+        <ApplicationsTracker />
+      </div>
     </div>
+    
   );
 }
