@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Circle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import ApplicationsTracker from "./ApplicationsTracker";
+import MarketSignal from "@/components/MarketSignal";
 
 type Week = {
   week_number: number;
@@ -20,6 +21,7 @@ export default function RoadmapView() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [userId, setUserId] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
+  const [userRole, setUserRole] = useState<string>("backend engineer");
 
   useEffect(() => {
     const load = async () => {
@@ -43,10 +45,19 @@ export default function RoadmapView() {
       if (logData) {
         const initial: Record<string, boolean> = {};
         logData.forEach((row) => {
-          initial[`${row.week_number}-${row.section}-${row.item_index}`] = row.done;
+          initial[`${row.week_number}-${row.section}-${row.item_index}`] =
+            row.done;
         });
         setChecked(initial);
       }
+
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", uid)
+        .single();
+
+      if (userRow?.role) setUserRole(userRow.role);
 
       setLoading(false);
     };
@@ -69,7 +80,7 @@ export default function RoadmapView() {
       }
 
       const daysWithActivity = new Set(
-        data.map((row) => new Date(row.updated_at).toDateString())
+        data.map((row) => new Date(row.updated_at).toDateString()),
       );
 
       let count = 0;
@@ -83,7 +94,8 @@ export default function RoadmapView() {
     computeStreak();
   }, [userId, checked]);
 
-  if (loading) return <p className="text-textDim text-sm">Loading your roadmap...</p>;
+  if (loading)
+    return <p className="text-textDim text-sm">Loading your roadmap...</p>;
   if (!weeks)
     return (
       <p className="text-textDim text-sm">
@@ -92,7 +104,8 @@ export default function RoadmapView() {
     );
 
   const week = weeks.find((w) => w.week_number === selected) || weeks[0];
-  const itemKey = (section: string, index: number) => `${week.week_number}-${section}-${index}`;
+  const itemKey = (section: string, index: number) =>
+    `${week.week_number}-${section}-${index}`;
 
   const toggle = async (section: string, index: number) => {
     const key = itemKey(section, index);
@@ -109,7 +122,7 @@ export default function RoadmapView() {
         done: newValue,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,week_number,section,item_index" }
+      { onConflict: "user_id,week_number,section,item_index" },
     );
 
     if (error) {
@@ -121,13 +134,18 @@ export default function RoadmapView() {
   const sections = [
     { title: "Skill actions", key: "skill", items: week.skill_actions },
     { title: "Networking", key: "networking", items: week.networking_actions },
-    { title: "Interview prep", key: "interview", items: week.interview_prep_actions },
+    {
+      title: "Interview prep",
+      key: "interview",
+      items: week.interview_prep_actions,
+    },
   ].filter((s) => s.items?.length);
 
   const totalItems = sections.reduce((sum, s) => sum + s.items.length, 0);
   const doneItems = sections.reduce(
-    (sum, s) => sum + s.items.filter((_, i) => checked[itemKey(s.key, i)]).length,
-    0
+    (sum, s) =>
+      sum + s.items.filter((_, i) => checked[itemKey(s.key, i)]).length,
+    0,
   );
 
   const getWeekCounts = (w: Week) => {
@@ -136,12 +154,17 @@ export default function RoadmapView() {
       { key: "networking", items: w.networking_actions },
       { key: "interview", items: w.interview_prep_actions },
     ];
-    const total = sectionsForWeek.reduce((sum, s) => sum + (s.items?.length || 0), 0);
+    const total = sectionsForWeek.reduce(
+      (sum, s) => sum + (s.items?.length || 0),
+      0,
+    );
     const done = sectionsForWeek.reduce(
       (sum, s) =>
         sum +
-        (s.items || []).filter((_, i) => checked[`${w.week_number}-${s.key}-${i}`]).length,
-      0
+        (s.items || []).filter(
+          (_, i) => checked[`${w.week_number}-${s.key}-${i}`],
+        ).length,
+      0,
     );
     return { total, done };
   };
@@ -151,10 +174,11 @@ export default function RoadmapView() {
       const { total, done } = getWeekCounts(w);
       return { total: acc.total + total, done: acc.done + done };
     },
-    { total: 0, done: 0 }
+    { total: 0, done: 0 },
   );
 
-  const overallPct = overall.total > 0 ? Math.round((overall.done / overall.total) * 100) : 0;
+  const overallPct =
+    overall.total > 0 ? Math.round((overall.done / overall.total) * 100) : 0;
 
   return (
     <div>
@@ -179,7 +203,9 @@ export default function RoadmapView() {
 
       <div className="grid grid-cols-[200px_1fr] gap-10">
         <div>
-          <div className="text-xs text-textDim mb-3 tracking-wide">Your plan</div>
+          <div className="text-xs text-textDim mb-3 tracking-wide">
+            Your plan
+          </div>
           {weeks.map((w) => (
             <div
               key={w.week_number}
@@ -207,7 +233,10 @@ export default function RoadmapView() {
         </div>
 
         <div>
-          <h2 className="font-serif text-2xl text-text mb-1.5">{week.focus_summary}</h2>
+          <MarketSignal searchTerm={userRole} />
+          <h2 className="font-serif text-2xl text-text mb-1.5">
+            {week.focus_summary}
+          </h2>
           <div className="text-sm text-textDim mb-1">
             Target: {week.application_target} applications this week
           </div>
@@ -230,7 +259,10 @@ export default function RoadmapView() {
                     {isChecked ? (
                       <CheckCircle2 size={15} className="text-accent" />
                     ) : (
-                      <Circle size={15} className="text-textDim group-hover:text-text" />
+                      <Circle
+                        size={15}
+                        className="text-textDim group-hover:text-text"
+                      />
                     )}
                     <span
                       className={`text-sm ${
@@ -250,6 +282,5 @@ export default function RoadmapView() {
         <ApplicationsTracker />
       </div>
     </div>
-    
   );
 }
