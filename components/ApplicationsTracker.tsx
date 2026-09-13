@@ -9,6 +9,7 @@ type Application = {
   role: string;
   status: string;
   interview_completed_at: string | null;
+  follow_up_sent_at: string | null;
 };
 
 const statusStyle: Record<
@@ -40,6 +41,19 @@ function daysSince(dateStr: string): number {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
+function followUpTemplate(company: string, role: string): string {
+  return `Subject: Following up — ${role} interview
+
+Hi [Interviewer name],
+
+Thanks again for taking the time to speak with me about the ${role} position at ${company}. I really enjoyed our conversation and learning more about the team.
+
+I wanted to check in on the status of the role and see if there's any additional information I can provide. Looking forward to hearing from you.
+
+Best,
+[Your name]`;
+}
+
 export default function ApplicationsTracker() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +61,7 @@ export default function ApplicationsTracker() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [openTemplateFor, setOpenTemplateFor] = useState<string | null>(null);
 
   const load = async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -55,7 +70,9 @@ export default function ApplicationsTracker() {
 
     const { data } = await supabase
       .from("applications")
-      .select("id, company, role, status, interview_completed_at")
+      .select(
+        "id, company, role, status, interview_completed_at, follow_up_sent_at",
+      )
       .eq("user_id", uid)
       .order("created_at", { ascending: false });
 
@@ -101,6 +118,20 @@ export default function ApplicationsTracker() {
       .eq("id", appId);
 
     if (!error) {
+      load();
+    } else {
+      console.error(error);
+    }
+  };
+
+  const markFollowUpSent = async (appId: string) => {
+    const { error } = await supabase
+      .from("applications")
+      .update({ follow_up_sent_at: new Date().toISOString() })
+      .eq("id", appId);
+
+    if (!error) {
+      setOpenTemplateFor(null);
       load();
     } else {
       console.error(error);
@@ -154,38 +185,80 @@ export default function ApplicationsTracker() {
       {apps.map((app) => {
         const s = statusStyle[app.status] ?? statusStyle.applied;
         return (
-          <div
-            key={app.id}
-            className="flex items-center justify-between py-3.5 border-b border-border"
-          >
-            <div>
-              <div className="text-sm text-text">{app.company}</div>
-              <div className="text-xs text-textDim mt-0.5">{app.role}</div>
+          <div key={app.id}>
+            <div className="flex items-center justify-between py-3.5 border-b border-border">
+              <div>
+                <div className="text-sm text-text">{app.company}</div>
+                <div className="text-xs text-textDim mt-0.5">{app.role}</div>
+              </div>
+              <div className="flex items-center gap-3.5">
+                {app.status === "waiting" && app.interview_completed_at && (
+                  <span className="font-mono text-[11px] text-textDim flex items-center gap-1">
+                    Day {daysSince(app.interview_completed_at)} of ~
+                    {DEFAULT_EXPECTED_DAYS}
+                  </span>
+                )}
+                {app.status === "waiting" &&
+                  app.interview_completed_at &&
+                  daysSince(app.interview_completed_at) >= 7 &&
+                  !app.follow_up_sent_at && (
+                    <button
+                      onClick={() =>
+                        setOpenTemplateFor(
+                          openTemplateFor === app.id ? null : app.id,
+                        )
+                      }
+                      className="text-xs border rounded px-2.5 py-1"
+                      style={{ borderColor: "#D4933D", color: "#D4933D" }}
+                    >
+                      Follow up
+                    </button>
+                  )}
+                {app.follow_up_sent_at && (
+                  <span className="text-[11px] text-textDim">Followed up</span>
+                )}
+                <select
+                  value={app.status}
+                  onChange={(e) => updateStatus(app.id, e.target.value)}
+                  style={{
+                    color: s.color,
+                    background: s.bg,
+                    borderColor: `${s.color}55`,
+                  }}
+                  className="text-xs rounded px-2.5 py-1 border cursor-pointer outline-none"
+                >
+                  {Object.entries(statusStyle).map(([key, val]) => (
+                    <option key={key} value={key} style={{ color: "#000" }}>
+                      {val.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="flex items-center gap-3.5">
-              {app.status === "waiting" && app.interview_completed_at && (
-                <span className="font-mono text-[11px] text-textDim flex items-center gap-1">
-                  Day {daysSince(app.interview_completed_at)} of ~
-                  {DEFAULT_EXPECTED_DAYS}
-                </span>
-              )}
-              <select
-                value={app.status}
-                onChange={(e) => updateStatus(app.id, e.target.value)}
-                style={{
-                  color: s.color,
-                  background: s.bg,
-                  borderColor: `${s.color}55`,
-                }}
-                className="text-xs rounded px-2.5 py-1 border cursor-pointer outline-none"
-              >
-                {Object.entries(statusStyle).map(([key, val]) => (
-                  <option key={key} value={key} style={{ color: "#000" }}>
-                    {val.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+
+            {openTemplateFor === app.id && (
+              <div className="bg-surface2 border border-border rounded p-4 mb-3 mt-1">
+                <textarea
+                  defaultValue={followUpTemplate(app.company, app.role)}
+                  className="w-full bg-transparent text-text text-sm outline-none resize-none"
+                  rows={9}
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => markFollowUpSent(app.id)}
+                    className="bg-accent text-bg text-xs font-semibold rounded px-3 py-1.5"
+                  >
+                    Mark as sent
+                  </button>
+                  <button
+                    onClick={() => setOpenTemplateFor(null)}
+                    className="text-xs text-textDim px-3 py-1.5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
