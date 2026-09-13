@@ -138,6 +138,20 @@ export default function ApplicationsTracker() {
     }
   };
 
+  const updateInterviewDate = async (appId: string, dateStr: string) => {
+    if (!dateStr) return;
+    const { error } = await supabase
+      .from("applications")
+      .update({ interview_completed_at: new Date(dateStr).toISOString() })
+      .eq("id", appId);
+
+    if (!error) {
+      load();
+    } else {
+      console.error(error);
+    }
+  };
+
   if (loading)
     return <p className="text-textDim text-sm">Loading applications...</p>;
 
@@ -193,9 +207,18 @@ export default function ApplicationsTracker() {
               </div>
               <div className="flex items-center gap-3.5">
                 {app.status === "waiting" && app.interview_completed_at && (
-                  <span className="font-mono text-[11px] text-textDim flex items-center gap-1">
+                  <span className="font-mono text-[11px] text-textDim flex items-center gap-1.5">
                     Day {daysSince(app.interview_completed_at)} of ~
                     {DEFAULT_EXPECTED_DAYS}
+                    <input
+                      type="date"
+                      value={app.interview_completed_at.slice(0, 10)}
+                      onChange={(e) =>
+                        updateInterviewDate(app.id, e.target.value)
+                      }
+                      className="bg-transparent text-textDim text-[10px] border border-border rounded px-1 py-0.5 outline-none"
+                      title="Edit interview date"
+                    />
                   </span>
                 )}
                 {app.status === "waiting" &&
