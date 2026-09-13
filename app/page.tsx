@@ -26,16 +26,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen px-14 py-12">
-      <div className="flex items-center justify-between mb-12">
-        <div className="font-serif text-lg font-semibold text-text">Forward</div>
+      <div className="flex items-center justify-between mb-10 pb-6 border-b border-border">
+        <div className="font-serif text-xl font-semibold text-text tracking-tight">
+          Forward
+        </div>
         {user && (
           <div className="flex gap-1 bg-surface border border-border rounded-md p-1">
             {(["intake", "roadmap"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 text-sm rounded capitalize ${
-                  tab === t ? "bg-surface2 text-text" : "text-textDim"
+                className={`px-4 py-1.5 text-sm rounded capitalize transition-colors ${
+                  tab === t ? "bg-surface2 text-text" : "text-textDim hover:text-text"
                 }`}
               >
                 {t}

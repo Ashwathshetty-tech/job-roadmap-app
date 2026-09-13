@@ -4,6 +4,7 @@ import { Circle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import ApplicationsTracker from "./ApplicationsTracker";
 import MarketSignal from "@/components/MarketSignal";
+import StateMessage from "./StateMessage";
 
 type Week = {
   week_number: number;
@@ -96,12 +97,14 @@ export default function RoadmapView() {
 
   if (loading)
     return <p className="text-textDim text-sm">Loading your roadmap...</p>;
+  
   if (!weeks)
-    return (
-      <p className="text-textDim text-sm">
-        No roadmap yet — complete the Intake form and generate one.
-      </p>
-    );
+  return (
+    <StateMessage
+      title="No roadmap yet"
+      description="Complete the intake form and we'll generate a personalized plan for you."
+    />
+  );
 
   const week = weeks.find((w) => w.week_number === selected) || weeks[0];
   const itemKey = (section: string, index: number) =>
@@ -182,23 +185,26 @@ export default function RoadmapView() {
 
   return (
     <div>
-      <div className="flex items-center gap-8 mb-8 pb-6 border-b border-border">
-        <div>
-          <div className="text-2xl font-serif text-text">{overallPct}%</div>
-          <div className="text-xs text-textDim">Overall progress</div>
-        </div>
-        <div>
-          <div className="text-2xl font-serif text-text">
-            {streak} {streak === 1 ? "day" : "days"}
+      <div className="grid grid-cols-3 gap-4 mb-10">
+        {[
+          { value: `${overallPct}%`, label: "Overall progress" },
+          {
+            value: `${streak} ${streak === 1 ? "day" : "days"}`,
+            label: "Current streak",
+          },
+          {
+            value: `${overall.done} / ${overall.total}`,
+            label: "Actions completed",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-surface border border-border rounded-md px-5 py-4"
+          >
+            <div className="text-2xl font-serif text-text">{stat.value}</div>
+            <div className="text-xs text-textDim mt-1">{stat.label}</div>
           </div>
-          <div className="text-xs text-textDim">Current streak</div>
-        </div>
-        <div>
-          <div className="text-2xl font-serif text-text">
-            {overall.done} / {overall.total}
-          </div>
-          <div className="text-xs text-textDim">Actions completed</div>
-        </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-[200px_1fr] gap-10">

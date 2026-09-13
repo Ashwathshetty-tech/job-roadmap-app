@@ -22,3 +22,8 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
 }
+
+input:focus, textarea:focus, select:focus, button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 168, 160, 0.4);
+}

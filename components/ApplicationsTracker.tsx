@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import StateMessage from "./StateMessage";
 
 type Application = {
   id: string;
@@ -191,16 +192,17 @@ export default function ApplicationsTracker() {
       )}
 
       {apps.length === 0 && (
-        <p className="text-textDim text-sm py-4">
-          No applications logged yet — add your first one above.
-        </p>
+        <StateMessage
+          title="No applications yet"
+          description="Add your first one above to start tracking your pipeline."
+        />
       )}
 
       {apps.map((app) => {
         const s = statusStyle[app.status] ?? statusStyle.applied;
         return (
           <div key={app.id}>
-            <div className="flex items-center justify-between py-3.5 border-b border-border">
+            <div className="flex items-center justify-between py-3.5 border-b border-border transition-colors hover:bg-surface2/50 -mx-2 px-2 rounded">
               <div>
                 <div className="text-sm text-text">{app.company}</div>
                 <div className="text-xs text-textDim mt-0.5">{app.role}</div>

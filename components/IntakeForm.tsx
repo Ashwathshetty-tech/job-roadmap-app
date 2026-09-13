@@ -18,6 +18,12 @@ export default function IntakeForm() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    if (!role.trim() || !years || stack.length === 0) {
+      setError(
+        "Please fill in your role, years of experience, and at least one tech stack tag.",
+      );
+      return;
+    }
     setError(null);
     setSaving(true);
 
@@ -56,7 +62,9 @@ export default function IntakeForm() {
     if (!res.ok) {
       const json = await res.json();
       console.error(json);
-      setError("Saved, but couldn't generate your roadmap. Try again from here.");
+      setError(
+        "Saved, but couldn't generate your roadmap. Try again from here.",
+      );
       return;
     }
 
@@ -191,8 +199,8 @@ export default function IntakeForm() {
         {saving
           ? "Saving..."
           : generating
-          ? "Generating your roadmap..."
-          : "Generate my roadmap"}{" "}
+            ? "Generating your roadmap..."
+            : "Generate my roadmap"}{" "}
         <ArrowRight size={15} />
       </button>
 
