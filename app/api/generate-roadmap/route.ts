@@ -26,6 +26,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Enforce a max of 2 roadmap generations per user
+  const currentCount = user.roadmap_generation_count || 0;
+  if (currentCount >= 2) {
+    return NextResponse.json(
+      { error: "You've reached the limit of 2 roadmap regenerations." },
+      { status: 429 },
+    );
+  }
+
   const prompt = `You are a career strategist helping a laid-off IT professional plan their job search.
 
 User profile:
@@ -94,6 +103,12 @@ Respond with ONLY valid JSON, no other text, in this exact shape:
     if (saveError) {
       return NextResponse.json({ error: saveError.message }, { status: 500 });
     }
+
+    // Increment the generation count
+    await supabase
+      .from("users")
+      .update({ roadmap_generation_count: currentCount + 1 })
+      .eq("id", userId);
 
     return NextResponse.json({ roadmap });
   } catch {
