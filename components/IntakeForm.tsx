@@ -143,7 +143,7 @@ export default function IntakeForm() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div>
           <label className="block text-sm text-textDim mb-2">
             Location / remote preference

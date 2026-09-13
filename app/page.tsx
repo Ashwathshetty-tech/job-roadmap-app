@@ -16,17 +16,20 @@ export default function Home() {
       setUser(data.user);
       setLoading(false);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      },
+    );
     return () => listener.subscription.unsubscribe();
   }, []);
 
   if (loading) return null;
 
   return (
-    <div className="min-h-screen px-14 py-12">
-      <div className="flex items-center justify-between mb-10 pb-6 border-b border-border">
+    <div className="min-h-screen px-4 py-8 sm:px-8 sm:py-10 lg:px-14 lg:py-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-border">
+        {" "}
         <div className="font-serif text-xl font-semibold text-text tracking-tight">
           Forward
         </div>
@@ -37,7 +40,9 @@ export default function Home() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={`px-4 py-1.5 text-sm rounded capitalize transition-colors ${
-                  tab === t ? "bg-surface2 text-text" : "text-textDim hover:text-text"
+                  tab === t
+                    ? "bg-surface2 text-text"
+                    : "text-textDim hover:text-text"
                 }`}
               >
                 {t}

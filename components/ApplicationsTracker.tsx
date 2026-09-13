@@ -169,7 +169,7 @@ export default function ApplicationsTracker() {
       </div>
 
       {showForm && (
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
             value={company}
             onChange={(e) => setCompany(e.target.value)}

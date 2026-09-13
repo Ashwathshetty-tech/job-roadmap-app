@@ -97,14 +97,14 @@ export default function RoadmapView() {
 
   if (loading)
     return <p className="text-textDim text-sm">Loading your roadmap...</p>;
-  
+
   if (!weeks)
-  return (
-    <StateMessage
-      title="No roadmap yet"
-      description="Complete the intake form and we'll generate a personalized plan for you."
-    />
-  );
+    return (
+      <StateMessage
+        title="No roadmap yet"
+        description="Complete the intake form and we'll generate a personalized plan for you."
+      />
+    );
 
   const week = weeks.find((w) => w.week_number === selected) || weeks[0];
   const itemKey = (section: string, index: number) =>
@@ -185,7 +185,7 @@ export default function RoadmapView() {
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-10">
         {[
           { value: `${overallPct}%`, label: "Overall progress" },
           {
@@ -207,16 +207,16 @@ export default function RoadmapView() {
         ))}
       </div>
 
-      <div className="grid grid-cols-[200px_1fr] gap-10">
-        <div>
-          <div className="text-xs text-textDim mb-3 tracking-wide">
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6 lg:gap-10">
+        <div className="flex lg:block gap-3 overflow-x-auto pb-2 lg:pb-0 lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0">
+          <div className="hidden lg:block text-xs text-textDim mb-3 tracking-wide">
             Your plan
           </div>
           {weeks.map((w) => (
             <div
               key={w.week_number}
               onClick={() => setSelected(w.week_number)}
-              className={`py-3 pl-3.5 mb-1 cursor-pointer border-l-2 ${
+              className={`flex-shrink-0 w-[160px] lg:w-auto py-3 pl-3.5 mb-0 lg:mb-1 cursor-pointer border-l-2 ${
                 w.week_number === selected ? "border-accent" : "border-border"
               }`}
             >
