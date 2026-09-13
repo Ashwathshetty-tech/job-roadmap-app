@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import ApplicationsTracker from "./ApplicationsTracker";
 import MarketSignal from "@/components/MarketSignal";
 import StateMessage from "./StateMessage";
+import ResourceLink from "./ResourceLink";
 
 type Week = {
   week_number: number;
@@ -280,6 +281,12 @@ export default function RoadmapView() {
                   </div>
                 );
               })}
+              {section.key === "interview" && section.items.length > 0 && (
+                <ResourceLink
+                  label="Practice a mock interview on DevInterview.AI (first one's free)"
+                  url="https://devinterview.ai"
+                />
+              )}
             </div>
           ))}
         </div>
