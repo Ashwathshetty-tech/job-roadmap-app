@@ -1,5 +1,5 @@
 import ResourceLink from "@/components/ResourceLink";
-import { Mic, Users, FileText, DollarSign, Code2 } from "lucide-react";
+import { Mic, Users, FileText, DollarSign, Code2, Zap } from "lucide-react";
 
 const resources = [
   {
@@ -42,18 +42,26 @@ const resources = [
     linkLabel: "Practice on NeetCode",
     url: "https://neetcode.io",
   },
+  {
+    icon: Zap,
+    title: "Application autofill",
+    description:
+      "A free Chrome extension that autofills job applications across Greenhouse, Lever, Workday, and more — cuts real time out of applying at volume.",
+    linkLabel: "Get Simplify",
+    url: "https://simplify.jobs",
+  },
 ];
 
 export default function Resources() {
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <h1 className="font-serif text-3xl font-medium text-text mb-2">Resources</h1>
       <p className="text-textDim text-sm mb-8 max-w-md">
         A short list of external tools worth using alongside your roadmap. We
         don't run these ourselves — just tools we think are genuinely useful.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {resources.map((r) => (
           <div key={r.title} className="bg-surface border border-border rounded-md p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-2">
