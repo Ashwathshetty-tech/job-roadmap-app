@@ -218,12 +218,12 @@ export default function RoadmapView() {
               key={w.week_number}
               onClick={() => setSelected(w.week_number)}
               className={`flex-shrink-0 w-[160px] lg:w-auto py-3 pl-3.5 mb-0 lg:mb-1 cursor-pointer border-l-2 ${
-                w.week_number === selected ? "border-accent" : "border-border"
+                w.week_number === selected ? "border-signal" : "border-border"
               }`}
             >
               <div
                 className={`font-mono text-[11px] ${
-                  w.week_number === selected ? "text-accent" : "text-textDim"
+                  w.week_number === selected ? "text-signal" : "text-textDim"
                 }`}
               >
                 WEEK {w.week_number}

@@ -20,11 +20,11 @@ const statusStyle: Record<
   applied: { label: "Applied", color: "#9AA4AC", bg: "transparent" },
   interviewing: {
     label: "Interviewing",
-    color: "#4FA8A0",
-    bg: "rgba(79,168,160,0.12)",
-  },
-  waiting: { label: "Waiting", color: "#D4933D", bg: "rgba(212,147,61,0.12)" },
-  offer: { label: "Offer", color: "#7FBF8F", bg: "rgba(127,191,143,0.12)" },
+    color: "#E8A339",
+    bg: "rgba(232,163,57,0.1)",
+  }, // signal — you're live
+  waiting: { label: "Waiting", color: "#D4933D", bg: "rgba(212,147,61,0.1)" },
+  offer: { label: "Offer", color: "#7FBF8F", bg: "rgba(127,191,143,0.12)" }, // confirmed win
   rejected: {
     label: "Rejected",
     color: "#C97066",
