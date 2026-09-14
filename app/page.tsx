@@ -6,9 +6,11 @@ import IntakeForm from "@/components/IntakeForm";
 import LoginForm from "@/components/LoginForm";
 import RoadmapView from "@/components/RoadmapView";
 import Resources from "@/components/Resource";
+import Connect from "@/components/Connect";
+
 
 export default function Home() {
-  const [tab, setTab] = useState<"intake" | "roadmap" | "resources">("intake");
+  const [tab, setTab] = useState<"intake" | "roadmap" | "resources"| "connect">("intake");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +38,7 @@ export default function Home() {
         </div>
         {user && (
           <div className="flex gap-1 bg-surface border border-border rounded-md p-1">
-            {(["intake", "roadmap", "resources"] as const).map((t) => (
+            {(["intake", "roadmap", "resources", "connect"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -59,8 +61,10 @@ export default function Home() {
         <IntakeForm />
       ) : tab === "roadmap" ? (
         <RoadmapView />
-      ) : (
+      ) : tab === "resources" ? (
         <Resources />
+      ) : (
+        <Connect />
       )}
     </div>
   );
