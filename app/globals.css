@@ -12,6 +12,7 @@
   --color-waiting: #D4933D;
   --color-success: #7FBF8F;
   --color-danger: #C97066;
+  --color-signal: #E8A339;
 
   --font-sans: var(--font-inter);
   --font-serif: var(--font-spectral);

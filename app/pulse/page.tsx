@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
 export const metadata = {
   title: "Tech Job Market Pulse — Live Hiring Data | Forward",
@@ -7,8 +6,6 @@ export const metadata = {
     "Live, weekly-updated job posting counts across backend, frontend, DevOps, QA, and full-stack engineering roles.",
 };
 
-// Revalidate this page's data at most once per hour so we're not hammering the
-// upstream API on every visit, while still staying reasonably current.
 export const revalidate = 3600;
 
 const ROLES = [
@@ -33,13 +30,11 @@ async function fetchRoleStat(role: string): Promise<RoleStat> {
       { next: { revalidate: 3600 } }
     );
     const data = await res.json();
-
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const jobs = data.jobs || [];
     const postedThisWeek = jobs.filter(
       (job: any) => new Date(job.publication_date).getTime() > oneWeekAgo
     ).length;
-
     return { role, totalOpenPostings: jobs.length, postedThisWeek };
   } catch {
     return { role, totalOpenPostings: 0, postedThisWeek: 0 };
@@ -48,64 +43,95 @@ async function fetchRoleStat(role: string): Promise<RoleStat> {
 
 export default async function MarketPulsePage() {
   const stats = await Promise.all(ROLES.map(fetchRoleStat));
+  const totalThisWeek = stats.reduce((sum, s) => sum + s.postedThisWeek, 0);
+  const asOf = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
   return (
     <div className="min-h-screen px-4 py-8 sm:px-8 sm:py-10 lg:px-14 lg:py-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-12 pb-6 border-b border-border">
         <Link href="/" className="font-serif text-xl font-semibold text-text tracking-tight">
           Forward
         </Link>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accentStrong"
-        >
-          Get your own roadmap <ArrowRight size={14} />
+        <Link href="/" className="text-sm text-accentStrong hover:text-text">
+          Build my roadmap
         </Link>
       </div>
 
-      <div className="max-w-3xl mb-10">
-        <h1 className="font-serif text-3xl sm:text-4xl font-medium text-text mb-3">
-          Tech Job Market Pulse
+      {/* Hero readout — the one bold, glowing element on the page */}
+      <div className="relative border-t-2 mb-14" style={{ borderTopColor: "#E8A339" }}>
+        <div
+          className="pt-8 pb-2"
+          style={{
+            boxShadow: "0 -12px 40px -12px rgba(232,163,57,0.25)",
+          }}
+        >
+          <div className="font-mono text-xs text-textDim mb-3 flex items-center gap-2">
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ background: "#E8A339" }}
+            />
+            LIVE READOUT · updated {asOf}
+          </div>
+          <div className="font-mono text-6xl sm:text-7xl" style={{ color: "#E8A339" }}>
+            {totalThisWeek}
+          </div>
+          <div className="text-text text-base sm:text-lg mt-2 max-w-md">
+            engineering roles posted this week, across the six functions below.
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mb-12">
+        <h1 className="font-serif text-2xl sm:text-3xl font-medium text-text mb-3 leading-snug">
+          This is a real signal, not a guess — the same data your roadmap is built on.
         </h1>
-        <p className="text-textDim text-sm sm:text-base max-w-xl">
-          Live remote job posting counts across common engineering roles, updated hourly.
-          If you're job-searching right now, this is a real snapshot of what's actually
-          hiring — not guesswork.
+        <p className="text-textDim text-sm sm:text-base">
+          If you're searching right now, use this as a compass, not a scoreboard. Slow
+          weeks happen. What matters is the trend, not any single number.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+      {/* Readout panels: sharp corners, mono data, amber top edge — the "instrument" treatment */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px mb-16 bg-border">
         {stats.map((s) => (
-          <div key={s.role} className="bg-surface border border-border rounded-md p-5">
-            <div className="text-sm text-textDim mb-3">{s.role}</div>
-            <div className="text-3xl font-serif text-text mb-1">{s.postedThisWeek}</div>
-            <div className="text-xs text-textDim mb-4">posted this week</div>
-            <div className="text-xs text-textDim border-t border-border pt-3">
-              <span className="text-accent font-mono">{s.totalOpenPostings}</span> total open roles (remote)
+          <div key={s.role} className="bg-bg p-6">
+            <div className="text-sm text-text mb-4">{s.role}</div>
+            <div className="font-mono text-3xl mb-1" style={{ color: "#E8A339" }}>
+              {s.postedThisWeek}
+            </div>
+            <div className="font-mono text-[11px] text-textDim mb-4">this week</div>
+            <div className="font-mono text-[11px] text-textDim pt-3 border-t border-border">
+              {s.totalOpenPostings} open total
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-surface2 border border-border rounded-md p-6 max-w-xl">
-        <div className="font-serif text-lg text-text mb-2">
-          Want a plan built around this data?
+      {/* Quiet content panel — soft, no glow, deliberately calm next to the readouts above */}
+      <div className="bg-surface border border-border rounded-md p-7 max-w-xl">
+        <div className="font-serif text-xl text-text mb-2">
+          Turn this into a plan built for you
         </div>
-        <p className="text-sm text-textDim mb-4">
-          Forward turns numbers like these into a personalized, week-by-week roadmap based
-          on your actual experience and stack — free to try.
+        <p className="text-sm text-textDim mb-5">
+          Forward reads data like this alongside your actual experience and builds a
+          week-by-week roadmap — not generic advice. Free to try.
         </p>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 bg-accent text-bg text-sm font-semibold rounded px-4 py-2"
+          className="inline-block bg-accent text-bg text-sm font-semibold rounded px-5 py-2.5"
         >
-          Build my roadmap <ArrowRight size={14} />
+          Build my roadmap
         </Link>
       </div>
 
-      <p className="text-xs text-textDim mt-8">
-        Data sourced from Remotive's public remote job listings. Figures reflect remote
-        postings only and are a directional signal, not a complete market count.
+      <p className="font-mono text-[11px] text-textDim mt-10">
+        Source: Remotive public listings. Remote postings only — a directional signal,
+        not a complete market count.
       </p>
     </div>
   );
