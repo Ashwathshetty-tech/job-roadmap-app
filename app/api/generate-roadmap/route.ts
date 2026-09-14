@@ -1,10 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const { allowed } = await checkRateLimit(ip, "generate-roadmap", 5, 60); // 5 requests per hour per IP
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests from this network. Please try again later." },
+      { status: 429 }
+    );
+  }
+  
   const { userId } = await req.json();
 
   // Fetch the user's intake data server-side (using anon key + their id is fine for a read here,

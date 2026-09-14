@@ -61,9 +61,8 @@ export default function IntakeForm() {
 
     if (!res.ok) {
       const json = await res.json();
-      console.error(json);
       if (res.status === 429) {
-        setError(json.error); // "You've reached the limit of 2 roadmap regenerations."
+        setError(json.error); // works for both the per-user limit and the IP rate limit
       } else {
         setError(
           "Saved, but couldn't generate your roadmap. Try again from here.",
