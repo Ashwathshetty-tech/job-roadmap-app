@@ -16,15 +16,16 @@ export default function IntakeForm() {
   const [generating, setGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streamedChars, setStreamedChars] = useState(0);
 
   const handleSubmit = async () => {
+    setError(null);
+
     if (!role.trim() || !years || stack.length === 0) {
-      setError(
-        "Please fill in your role, years of experience, and at least one tech stack tag.",
-      );
+      setError("Please fill in your role, years of experience, and at least one tech stack tag.");
       return;
     }
-    setError(null);
+
     setSaving(true);
 
     const { data: userData } = await supabase.auth.getUser();
@@ -50,29 +51,60 @@ export default function IntakeForm() {
 
     setSaved(true);
     setGenerating(true);
+    setStreamedChars(0);
 
-    const res = await fetch("/api/generate-roadmap", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
+    try {
+      const res = await fetch("/api/generate-roadmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
 
-    setGenerating(false);
-
-    if (!res.ok) {
-      const json = await res.json();
-      if (res.status === 429) {
-        setError(json.error); // works for both the per-user limit and the IP rate limit
-      } else {
-        setError(
-          "Saved, but couldn't generate your roadmap. Try again from here.",
-        );
+      // Pre-stream failures (rate limit, missing intake data) still return normal JSON errors
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({ error: "Something went wrong." }));
+        setError(json.error || "Couldn't generate your roadmap. Try again.");
+        setGenerating(false);
+        return;
       }
-      return;
-    }
 
-    // Success — the RoadmapView component will fetch the saved roadmap
-    // when the user switches to the Roadmap tab.
+      if (!res.body) {
+        setError("Couldn't generate your roadmap. Try again.");
+        setGenerating(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let succeeded = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        setStreamedChars((prev) => prev + chunk.length);
+      }
+
+      if (buffer.includes("[[DONE]]")) {
+        succeeded = true;
+      } else if (buffer.includes("[[ERROR:")) {
+        setError("Generated, but couldn't save your roadmap. Try again.");
+      } else {
+        setError("Something interrupted your roadmap generation. Try again.");
+      }
+
+      setGenerating(false);
+      if (succeeded) {
+        // RoadmapView fetches the freshly-saved roadmap when the user switches tabs
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Couldn't generate your roadmap. Check your connection and try again.");
+      setGenerating(false);
+    }
   };
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -202,10 +234,16 @@ export default function IntakeForm() {
         {saving
           ? "Saving..."
           : generating
-            ? "Generating your roadmap..."
-            : "Generate my roadmap"}{" "}
+          ? "Writing your roadmap..."
+          : "Generate my roadmap"}{" "}
         <ArrowRight size={15} />
       </button>
+
+      {generating && (
+        <p className="font-mono text-[11px] text-textDim mt-2">
+          {streamedChars > 0 ? `${streamedChars} characters written so far...` : "Connecting..."}
+        </p>
+      )}
 
       {saved && !generating && !error && (
         <p className="text-accent text-sm mt-3">

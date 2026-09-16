@@ -3,28 +3,27 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
+export const runtime = "nodejs";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const { allowed } = await checkRateLimit(ip, "generate-roadmap", 5, 60); // 5 requests per hour per IP
-
+  const { allowed } = await checkRateLimit(ip, "generate-roadmap", 5, 60);
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests from this network. Please try again later." },
       { status: 429 }
     );
   }
-  
+
   const { userId } = await req.json();
 
-  // Fetch the user's intake data server-side (using anon key + their id is fine for a read here,
-  // since we're not modifying data — just be sure RLS SELECT policy allows it, which we set up Day 6)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+
   const { data: user, error: userError } = await supabase
     .from("users")
     .select("*")
@@ -32,18 +31,14 @@ export async function POST(req: Request) {
     .single();
 
   if (userError || !user) {
-    return NextResponse.json(
-      { error: "Could not load user intake data" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Could not load user intake data" }, { status: 400 });
   }
 
-  // Enforce a max of 2 roadmap generations per user
   const currentCount = user.roadmap_generation_count || 0;
   if (currentCount >= 2) {
     return NextResponse.json(
       { error: "You've reached the limit of 2 roadmap regenerations." },
-      { status: 429 },
+      { status: 429 }
     );
   }
 
@@ -67,7 +62,8 @@ Generate a 4-week roadmap. For each week, include:
 
 Tone: direct, practical, encouraging without being saccharine.
 
-Respond with ONLY valid JSON, no other text, in this exact shape:
+Respond with ONLY valid JSON, no other text. Do not wrap the JSON in markdown
+code blocks or backticks. Output raw JSON only, in this exact shape:
 {
   "weeks": [
     {
@@ -81,52 +77,71 @@ Respond with ONLY valid JSON, no other text, in this exact shape:
   ]
 }`;
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
-    messages: [{ role: "user", content: prompt }],
+  const encoder = new TextEncoder();
+  let fullText = "";
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const anthropicStream = anthropic.messages.stream({
+          model: "claude-sonnet-4-6",
+          max_tokens: 2000,
+          messages: [{ role: "user", content: prompt }],
+        });
+
+        anthropicStream.on("text", (delta) => {
+          fullText += delta;
+          controller.enqueue(encoder.encode(delta));
+        });
+
+        anthropicStream.on("end", async () => {
+          try {
+            const cleaned = fullText
+              .replace(/^```json\s*/i, "")
+              .replace(/^```\s*/i, "")
+              .replace(/```\s*$/i, "")
+              .trim();
+
+            const roadmap = JSON.parse(cleaned);
+
+            const { error: saveError } = await supabase
+              .from("roadmaps")
+              .upsert({ user_id: userId, weeks: roadmap.weeks }, { onConflict: "user_id" });
+
+            if (saveError) {
+              console.error("Failed to save roadmap:", saveError);
+              controller.enqueue(encoder.encode("\n[[ERROR:SAVE_FAILED]]"));
+            } else {
+              await supabase
+                .from("users")
+                .update({ roadmap_generation_count: currentCount + 1 })
+                .eq("id", userId);
+              controller.enqueue(encoder.encode("\n[[DONE]]"));
+            }
+          } catch (parseErr) {
+            console.error("Failed to parse streamed roadmap:", parseErr, fullText);
+            controller.enqueue(encoder.encode("\n[[ERROR:PARSE_FAILED]]"));
+          }
+          controller.close();
+        });
+
+        anthropicStream.on("error", (err) => {
+          console.error("Anthropic stream error:", err);
+          controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
+          controller.close();
+        });
+      } catch (err) {
+        console.error("Failed to start stream:", err);
+        controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
+        controller.close();
+      }
+    },
   });
 
-  const textBlock = message.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    return NextResponse.json(
-      { error: "No text response from model" },
-      { status: 500 },
-    );
-  }
-
-  try {
-    // Strip markdown code fences if present
-    const cleaned = textBlock.text
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-
-    const roadmap = JSON.parse(cleaned);
-
-    const { error: saveError } = await supabase
-      .from("roadmaps")
-      .upsert(
-        { user_id: userId, weeks: roadmap.weeks },
-        { onConflict: "user_id" },
-      );
-
-    if (saveError) {
-      return NextResponse.json({ error: saveError.message }, { status: 500 });
-    }
-
-    // Increment the generation count
-    await supabase
-      .from("users")
-      .update({ roadmap_generation_count: currentCount + 1 })
-      .eq("id", userId);
-
-    return NextResponse.json({ roadmap });
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to parse roadmap JSON", raw: textBlock.text },
-      { status: 500 },
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
