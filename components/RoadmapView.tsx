@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Circle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import ApplicationsTracker from "./ApplicationsTracker";
+import StateMessage from "@/components/StateMessage";
 import MarketSignal from "@/components/MarketSignal";
-import StateMessage from "./StateMessage";
-import ResourceLink from "./ResourceLink";
+import ApplicationsTracker from "@/components/ApplicationsTracker";
+import type { GenerationState } from "@/app/page";
 
 type Week = {
   week_number: number;
@@ -16,55 +16,85 @@ type Week = {
   interview_prep_actions: string[];
 };
 
-export default function RoadmapView() {
+type Props = {
+  genState: GenerationState;
+  onAcknowledgeComplete: () => void;
+};
+
+export default function RoadmapView({ genState, onAcknowledgeComplete }: Props) {
   const [weeks, setWeeks] = useState<Week[] | null>(null);
   const [selected, setSelected] = useState(1);
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [userId, setUserId] = useState<string | null>(null);
-  const [streak, setStreak] = useState(0);
   const [userRole, setUserRole] = useState<string>("backend engineer");
+  const [streak, setStreak] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const load = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id ?? null;
+    setUserId(uid);
+
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", uid)
+      .single();
+    if (userRow?.role) setUserRole(userRow.role);
+
+    const { data: roadmapData, error: roadmapError } = await supabase
+      .from("roadmaps")
+      .select("weeks")
+      .eq("user_id", uid)
+      .single();
+
+    if (!roadmapError && roadmapData) setWeeks(roadmapData.weeks as Week[]);
+
+    const { data: logData } = await supabase
+      .from("action_log")
+      .select("week_number, section, item_index, done")
+      .eq("user_id", uid);
+
+    if (logData) {
+      const initial: Record<string, boolean> = {};
+      logData.forEach((row) => {
+        initial[`${row.week_number}-${row.section}-${row.item_index}`] = row.done;
+      });
+      setChecked(initial);
+    }
+
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const load = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id ?? null;
-      setUserId(uid);
-
-      const { data: roadmapData, error: roadmapError } = await supabase
-        .from("roadmaps")
-        .select("weeks")
-        .eq("user_id", uid)
-        .single();
-
-      if (!roadmapError && roadmapData) setWeeks(roadmapData.weeks as Week[]);
-
-      const { data: logData } = await supabase
-        .from("action_log")
-        .select("week_number, section, item_index, done")
-        .eq("user_id", uid);
-
-      if (logData) {
-        const initial: Record<string, boolean> = {};
-        logData.forEach((row) => {
-          initial[`${row.week_number}-${row.section}-${row.item_index}`] =
-            row.done;
-        });
-        setChecked(initial);
-      }
-
-      const { data: userRow } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", uid)
-        .single();
-
-      if (userRow?.role) setUserRole(userRow.role);
-
-      setLoading(false);
-    };
     load();
   }, []);
+
+  // Re-fetch the roadmap once a background generation finishes
+  useEffect(() => {
+    if (genState.justCompleted) {
+      load().then(() => onAcknowledgeComplete());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genState.justCompleted]);
+
+  // Live elapsed-time counter while generating
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (genState.isGenerating) {
+      setElapsedSeconds(0);
+      intervalRef.current = setInterval(() => {
+        setElapsedSeconds((s) => s + 1);
+      }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [genState.isGenerating]);
 
   useEffect(() => {
     const computeStreak = async () => {
@@ -82,7 +112,7 @@ export default function RoadmapView() {
       }
 
       const daysWithActivity = new Set(
-        data.map((row) => new Date(row.updated_at).toDateString()),
+        data.map((row) => new Date(row.updated_at).toDateString())
       );
 
       let count = 0;
@@ -96,20 +126,51 @@ export default function RoadmapView() {
     computeStreak();
   }, [userId, checked]);
 
-  if (loading)
-    return <p className="text-textDim text-sm">Loading your roadmap...</p>;
+  // --- Live generating banner (shown regardless of whether a roadmap already exists) ---
+  const generatingBanner = genState.isGenerating && (
+    <div className="border-t-2 border-signal mb-10">
+      <div className="bg-surface px-6 py-6">
+        <div className="font-mono text-xs text-textDim mb-3 flex items-center gap-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-signal animate-pulse" />
+          LIVE · writing your roadmap · {elapsedSeconds}s
+        </div>
+        <div className="font-mono text-3xl text-signal mb-1">
+          {genState.streamedChars > 0 ? genState.streamedChars : "—"}
+        </div>
+        <div className="text-xs text-textDim">characters written so far</div>
+      </div>
+    </div>
+  );
 
-  if (!weeks)
-    return (
+  const errorBanner = genState.error && !genState.isGenerating && (
+    <div className="mb-10">
       <StateMessage
-        title="No roadmap yet"
-        description="Complete the intake form and we'll generate a personalized plan for you."
+        title="Something went wrong"
+        description={genState.error}
+        tone="error"
       />
+    </div>
+  );
+
+  if (loading) return <p className="text-textDim text-sm">Loading your roadmap...</p>;
+
+  if (!weeks) {
+    return (
+      <div>
+        {generatingBanner}
+        {errorBanner}
+        {!genState.isGenerating && (
+          <StateMessage
+            title="No roadmap yet"
+            description="Complete the intake form and we'll generate a personalized plan for you."
+          />
+        )}
+      </div>
     );
+  }
 
   const week = weeks.find((w) => w.week_number === selected) || weeks[0];
-  const itemKey = (section: string, index: number) =>
-    `${week.week_number}-${section}-${index}`;
+  const itemKey = (section: string, index: number) => `${week.week_number}-${section}-${index}`;
 
   const toggle = async (section: string, index: number) => {
     const key = itemKey(section, index);
@@ -126,7 +187,7 @@ export default function RoadmapView() {
         done: newValue,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,week_number,section,item_index" },
+      { onConflict: "user_id,week_number,section,item_index" }
     );
 
     if (error) {
@@ -138,18 +199,13 @@ export default function RoadmapView() {
   const sections = [
     { title: "Skill actions", key: "skill", items: week.skill_actions },
     { title: "Networking", key: "networking", items: week.networking_actions },
-    {
-      title: "Interview prep",
-      key: "interview",
-      items: week.interview_prep_actions,
-    },
+    { title: "Interview prep", key: "interview", items: week.interview_prep_actions },
   ].filter((s) => s.items?.length);
 
   const totalItems = sections.reduce((sum, s) => sum + s.items.length, 0);
   const doneItems = sections.reduce(
-    (sum, s) =>
-      sum + s.items.filter((_, i) => checked[itemKey(s.key, i)]).length,
-    0,
+    (sum, s) => sum + s.items.filter((_, i) => checked[itemKey(s.key, i)]).length,
+    0
   );
 
   const getWeekCounts = (w: Week) => {
@@ -158,17 +214,12 @@ export default function RoadmapView() {
       { key: "networking", items: w.networking_actions },
       { key: "interview", items: w.interview_prep_actions },
     ];
-    const total = sectionsForWeek.reduce(
-      (sum, s) => sum + (s.items?.length || 0),
-      0,
-    );
+    const total = sectionsForWeek.reduce((sum, s) => sum + (s.items?.length || 0), 0);
     const done = sectionsForWeek.reduce(
       (sum, s) =>
         sum +
-        (s.items || []).filter(
-          (_, i) => checked[`${w.week_number}-${s.key}-${i}`],
-        ).length,
-      0,
+        (s.items || []).filter((_, i) => checked[`${w.week_number}-${s.key}-${i}`]).length,
+      0
     );
     return { total, done };
   };
@@ -178,34 +229,30 @@ export default function RoadmapView() {
       const { total, done } = getWeekCounts(w);
       return { total: acc.total + total, done: acc.done + done };
     },
-    { total: 0, done: 0 },
+    { total: 0, done: 0 }
   );
 
-  const overallPct =
-    overall.total > 0 ? Math.round((overall.done / overall.total) * 100) : 0;
+  const overallPct = overall.total > 0 ? Math.round((overall.done / overall.total) * 100) : 0;
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-10">
-        {[
-          { value: `${overallPct}%`, label: "Overall progress" },
-          {
-            value: `${streak} ${streak === 1 ? "day" : "days"}`,
-            label: "Current streak",
-          },
-          {
-            value: `${overall.done} / ${overall.total}`,
-            label: "Actions completed",
-          },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-surface border border-border rounded-md px-5 py-4"
-          >
-            <div className="text-2xl font-serif text-text">{stat.value}</div>
-            <div className="text-xs text-textDim mt-1">{stat.label}</div>
-          </div>
-        ))}
+      {generatingBanner}
+      {errorBanner}
+
+      {/* Instrument-panel stats readout */}
+      <div className="border-t-2 border-signal mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-border pt-px">
+          {[
+            { value: `${overallPct}%`, label: "overall progress" },
+            { value: `${streak}`, label: streak === 1 ? "day streak" : "day streak" },
+            { value: `${overall.done}/${overall.total}`, label: "actions completed" },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-bg px-5 py-5">
+              <div className="font-mono text-3xl text-signal">{stat.value}</div>
+              <div className="font-mono text-[11px] text-textDim mt-1">{stat.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6 lg:gap-10">
@@ -241,9 +288,8 @@ export default function RoadmapView() {
 
         <div>
           <MarketSignal searchTerm={userRole} />
-          <h2 className="font-serif text-2xl text-text mb-1.5">
-            {week.focus_summary}
-          </h2>
+
+          <h2 className="font-serif text-2xl text-text mb-1.5">{week.focus_summary}</h2>
           <div className="text-sm text-textDim mb-1">
             Target: {week.application_target} applications this week
           </div>
@@ -266,10 +312,7 @@ export default function RoadmapView() {
                     {isChecked ? (
                       <CheckCircle2 size={15} className="text-accent" />
                     ) : (
-                      <Circle
-                        size={15}
-                        className="text-textDim group-hover:text-text"
-                      />
+                      <Circle size={15} className="text-textDim group-hover:text-text" />
                     )}
                     <span
                       className={`text-sm ${
@@ -281,16 +324,11 @@ export default function RoadmapView() {
                   </div>
                 );
               })}
-              {section.key === "interview" && section.items.length > 0 && (
-                <ResourceLink
-                  label="Practice a mock interview on DevInterview.AI (first one's free)"
-                  url="https://devinterview.ai"
-                />
-              )}
             </div>
           ))}
         </div>
       </div>
+
       <div className="mt-12 pt-8 border-t border-border">
         <ApplicationsTracker />
       </div>

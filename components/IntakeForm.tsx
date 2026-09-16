@@ -3,7 +3,19 @@ import { useState } from "react";
 import { X, ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-export default function IntakeForm() {
+type Props = {
+  onGenerationStart: () => void;
+  onGenerationProgress: (chars: number) => void;
+  onGenerationComplete: () => void;
+  onGenerationError: (message: string) => void;
+};
+
+export default function IntakeForm({
+  onGenerationStart,
+  onGenerationProgress,
+  onGenerationComplete,
+  onGenerationError,
+}: Props) {
   const [role, setRole] = useState("");
   const [years, setYears] = useState("");
   const [stack, setStack] = useState<string[]>([]);
@@ -13,10 +25,7 @@ export default function IntakeForm() {
   const [exitReason, setExitReason] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [streamedChars, setStreamedChars] = useState(0);
 
   const handleSubmit = async () => {
     setError(null);
@@ -49,9 +58,9 @@ export default function IntakeForm() {
       return;
     }
 
-    setSaved(true);
-    setGenerating(true);
-    setStreamedChars(0);
+    // Hand off to the Roadmap tab immediately — generation continues in the
+    // background while the user is already looking at the live readout there.
+    onGenerationStart();
 
     try {
       const res = await fetch("/api/generate-roadmap", {
@@ -60,24 +69,21 @@ export default function IntakeForm() {
         body: JSON.stringify({ userId }),
       });
 
-      // Pre-stream failures (rate limit, missing intake data) still return normal JSON errors
       if (!res.ok) {
         const json = await res.json().catch(() => ({ error: "Something went wrong." }));
-        setError(json.error || "Couldn't generate your roadmap. Try again.");
-        setGenerating(false);
+        onGenerationError(json.error || "Couldn't generate your roadmap. Try again.");
         return;
       }
 
       if (!res.body) {
-        setError("Couldn't generate your roadmap. Try again.");
-        setGenerating(false);
+        onGenerationError("Couldn't generate your roadmap. Try again.");
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let succeeded = false;
+      let totalChars = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -85,25 +91,20 @@ export default function IntakeForm() {
 
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
-        setStreamedChars((prev) => prev + chunk.length);
+        totalChars += chunk.length;
+        onGenerationProgress(totalChars);
       }
 
       if (buffer.includes("[[DONE]]")) {
-        succeeded = true;
+        onGenerationComplete();
       } else if (buffer.includes("[[ERROR:")) {
-        setError("Generated, but couldn't save your roadmap. Try again.");
+        onGenerationError("Generated, but couldn't save your roadmap. Try again.");
       } else {
-        setError("Something interrupted your roadmap generation. Try again.");
-      }
-
-      setGenerating(false);
-      if (succeeded) {
-        // RoadmapView fetches the freshly-saved roadmap when the user switches tabs
+        onGenerationError("Something interrupted your roadmap generation. Try again.");
       }
     } catch (err) {
       console.error(err);
-      setError("Couldn't generate your roadmap. Check your connection and try again.");
-      setGenerating(false);
+      onGenerationError("Couldn't generate your roadmap. Check your connection and try again.");
     }
   };
 
@@ -228,28 +229,12 @@ export default function IntakeForm() {
 
       <button
         onClick={handleSubmit}
-        disabled={saving || generating}
+        disabled={saving}
         className="bg-accent text-bg font-semibold text-sm rounded px-5 py-3 flex items-center gap-2 disabled:opacity-50"
       >
-        {saving
-          ? "Saving..."
-          : generating
-          ? "Writing your roadmap..."
-          : "Generate my roadmap"}{" "}
-        <ArrowRight size={15} />
+        {saving ? "Saving..." : "Generate my roadmap"} <ArrowRight size={15} />
       </button>
 
-      {generating && (
-        <p className="font-mono text-[11px] text-textDim mt-2">
-          {streamedChars > 0 ? `${streamedChars} characters written so far...` : "Connecting..."}
-        </p>
-      )}
-
-      {saved && !generating && !error && (
-        <p className="text-accent text-sm mt-3">
-          Done — switch to the Roadmap tab to see your plan.
-        </p>
-      )}
       {error && <p className="text-danger text-sm mt-3">{error}</p>}
     </div>
   );
