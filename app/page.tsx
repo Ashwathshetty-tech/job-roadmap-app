@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import IntakeForm from "@/components/IntakeForm";
 import LoginForm from "@/components/LoginForm";
 import RoadmapView from "@/components/RoadmapView";
-import Resources from "@/components/Resources";
+import Resources from "@/components/Resource";
 import Connect from "@/components/Connect";
 
 export type GenerationState = {
