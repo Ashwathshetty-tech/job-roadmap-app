@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests from this network. Please try again later." },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
   const { data: user, error: userError } = await supabase
@@ -31,117 +31,133 @@ export async function POST(req: Request) {
     .single();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Could not load user intake data" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Could not load user intake data" },
+      { status: 400 },
+    );
   }
 
   const currentCount = user.roadmap_generation_count || 0;
   if (currentCount >= 2) {
     return NextResponse.json(
       { error: "You've reached the limit of 2 roadmap regenerations." },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
-  const prompt = `You are a career strategist helping a laid-off IT professional plan their job search.
+  // I want to stop generating Roadmap temporarity and just show prompt contact details to connect with to generateb road map
+  return NextResponse.json(
+    { error: "Roadmap generation is temporarily unavailable. Please contact support to generate a new roadmap." },
+    { status: 503 },
+  );
 
-User profile:
-- Role: ${user.role}
-- Years of experience: ${user.years_experience}
-- Tech stack: ${(user.tech_stack || []).join(", ")}
-- Target roles: ${(user.target_roles || []).join(", ") || "not specified"}
-- Location / remote preference: ${user.location}
-- Runway: ${user.runway_weeks} weeks before financial pressure increases
-- Reason for leaving: ${user.exit_reason}
+//   const prompt = `You are a career strategist helping a laid-off IT professional plan their job search.
 
-Generate a 4-week roadmap. For each week, include:
-1. A one-sentence focus summary
-2. 1-3 specific skill-building actions
-3. A weekly application target (realistic given their experience level and runway)
-4. 1-2 networking actions
-5. Interview-prep actions (only from week 2 onward, escalating in specificity)
+// User profile:
+// - Role: ${user.role}
+// - Years of experience: ${user.years_experience}
+// - Tech stack: ${(user.tech_stack || []).join(", ")}
+// - Target roles: ${(user.target_roles || []).join(", ") || "not specified"}
+// - Location / remote preference: ${user.location}
+// - Runway: ${user.runway_weeks} weeks before financial pressure increases
+// - Reason for leaving: ${user.exit_reason}
 
-Tone: direct, practical, encouraging without being saccharine.
+// Generate a 4-week roadmap. For each week, include:
+// 1. A one-sentence focus summary
+// 2. 1-3 specific skill-building actions
+// 3. A weekly application target (realistic given their experience level and runway)
+// 4. 1-2 networking actions
+// 5. Interview-prep actions (only from week 2 onward, escalating in specificity)
 
-Respond with ONLY valid JSON, no other text. Do not wrap the JSON in markdown
-code blocks or backticks. Output raw JSON only, in this exact shape:
-{
-  "weeks": [
-    {
-      "week_number": 1,
-      "focus_summary": "...",
-      "skill_actions": ["...", "..."],
-      "application_target": 8,
-      "networking_actions": ["..."],
-      "interview_prep_actions": []
-    }
-  ]
-}`;
+// Tone: direct, practical, encouraging without being saccharine.
 
-  const encoder = new TextEncoder();
-  let fullText = "";
+// Respond with ONLY valid JSON, no other text. Do not wrap the JSON in markdown
+// code blocks or backticks. Output raw JSON only, in this exact shape:
+// {
+//   "weeks": [
+//     {
+//       "week_number": 1,
+//       "focus_summary": "...",
+//       "skill_actions": ["...", "..."],
+//       "application_target": 8,
+//       "networking_actions": ["..."],
+//       "interview_prep_actions": []
+//     }
+//   ]
+// }`;
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        const anthropicStream = anthropic.messages.stream({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }],
-        });
+//   const encoder = new TextEncoder();
+//   let fullText = "";
 
-        anthropicStream.on("text", (delta) => {
-          fullText += delta;
-          controller.enqueue(encoder.encode(delta));
-        });
+//   const stream = new ReadableStream({
+//     async start(controller) {
+//       try {
+//         const anthropicStream = anthropic.messages.stream({
+//           model: "claude-sonnet-4-6",
+//           max_tokens: 2000,
+//           messages: [{ role: "user", content: prompt }],
+//         });
 
-        anthropicStream.on("end", async () => {
-          try {
-            const cleaned = fullText
-              .replace(/^```json\s*/i, "")
-              .replace(/^```\s*/i, "")
-              .replace(/```\s*$/i, "")
-              .trim();
+//         anthropicStream.on("text", (delta) => {
+//           fullText += delta;
+//           controller.enqueue(encoder.encode(delta));
+//         });
 
-            const roadmap = JSON.parse(cleaned);
+//         anthropicStream.on("end", async () => {
+//           try {
+//             const cleaned = fullText
+//               .replace(/^```json\s*/i, "")
+//               .replace(/^```\s*/i, "")
+//               .replace(/```\s*$/i, "")
+//               .trim();
 
-            const { error: saveError } = await supabase
-              .from("roadmaps")
-              .upsert({ user_id: userId, weeks: roadmap.weeks }, { onConflict: "user_id" });
+//             const roadmap = JSON.parse(cleaned);
 
-            if (saveError) {
-              console.error("Failed to save roadmap:", saveError);
-              controller.enqueue(encoder.encode("\n[[ERROR:SAVE_FAILED]]"));
-            } else {
-              await supabase
-                .from("users")
-                .update({ roadmap_generation_count: currentCount + 1 })
-                .eq("id", userId);
-              controller.enqueue(encoder.encode("\n[[DONE]]"));
-            }
-          } catch (parseErr) {
-            console.error("Failed to parse streamed roadmap:", parseErr, fullText);
-            controller.enqueue(encoder.encode("\n[[ERROR:PARSE_FAILED]]"));
-          }
-          controller.close();
-        });
+//             const { error: saveError } = await supabase
+//               .from("roadmaps")
+//               .upsert(
+//                 { user_id: userId, weeks: roadmap.weeks },
+//                 { onConflict: "user_id" },
+//               );
 
-        anthropicStream.on("error", (err) => {
-          console.error("Anthropic stream error:", err);
-          controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
-          controller.close();
-        });
-      } catch (err) {
-        console.error("Failed to start stream:", err);
-        controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
-        controller.close();
-      }
-    },
-  });
+//             if (saveError) {
+//               console.error("Failed to save roadmap:", saveError);
+//               controller.enqueue(encoder.encode("\n[[ERROR:SAVE_FAILED]]"));
+//             } else {
+//               await supabase
+//                 .from("users")
+//                 .update({ roadmap_generation_count: currentCount + 1 })
+//                 .eq("id", userId);
+//               controller.enqueue(encoder.encode("\n[[DONE]]"));
+//             }
+//           } catch (parseErr) {
+//             console.error(
+//               "Failed to parse streamed roadmap:",
+//               parseErr,
+//               fullText,
+//             );
+//             controller.enqueue(encoder.encode("\n[[ERROR:PARSE_FAILED]]"));
+//           }
+//           controller.close();
+//         });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-    },
-  });
+//         anthropicStream.on("error", (err) => {
+//           console.error("Anthropic stream error:", err);
+//           controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
+//           controller.close();
+//         });
+//       } catch (err) {
+//         console.error("Failed to start stream:", err);
+//         controller.enqueue(encoder.encode("\n[[ERROR:STREAM_FAILED]]"));
+//         controller.close();
+//       }
+//     },
+//   });
+
+//   return new Response(stream, {
+//     headers: {
+//       "Content-Type": "text/plain; charset=utf-8",
+//       "Cache-Control": "no-cache",
+//     },
+//   });
 }
